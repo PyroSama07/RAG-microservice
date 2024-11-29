@@ -2,6 +2,6 @@
 /data_rag
 /dev_rag
 *__pycache__*
-*.ipynb
+*.ipynb*
 /ollama_data/*
 /qdrant_data/*
