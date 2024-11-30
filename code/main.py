@@ -5,7 +5,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 import logging 
 import os
 from dotenv import load_dotenv
-from .router import ingestion, delete
+from .router import ingestion, delete, chat
 from ollama import AsyncClient
 
 logging.basicConfig(level=logging.DEBUG) 
@@ -19,7 +19,7 @@ EMBEDDING_SIZE=os.getenv('EMBEDDING_SIZE')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    emb_client = AsyncClient(host=OLLAMA_URL)
+    emb_client = AsyncClient(host=OLLAMA_URL,timeout=120)
     logger.debug("Embeddings initialized")
     client = QdrantClient(QDRANT_URL,timeout=60)
     if not client.collection_exists(collection_name=COLLECTION_NAME):
@@ -57,6 +57,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(ingestion.router)
 app.include_router(delete.router)
+app.include_router(chat.router)
 
 @app.get("/")
 def read_root():
