@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from qdrant_client import QdrantClient
 from ollama import AsyncClient
 from pydantic import BaseModel
+from typing import AsyncGenerator
 from ..dependency import get_client, get_emb_client
 import os
 from dotenv import load_dotenv
-import logging
 
-logging.basicConfig(level=logging.DEBUG) 
+import logging
 logger = logging.getLogger()
 
 load_dotenv()
@@ -24,7 +25,7 @@ async def rag_answer(
     question: Question,
     emb_client: AsyncClient = Depends(get_emb_client),
     client: QdrantClient = Depends(get_client),
-    ) -> dict:
+    ) -> StreamingResponse:
     embed = await emb_client.embed(model=EMBEDDING_NAME,input=question.question)
     vector = embed.embeddings[0]
     payload = client.query_points(
@@ -41,12 +42,26 @@ async def rag_answer(
                         f'''You are a RAG chatbot. Answer the question based on given context. If incorrect context return "NOT FOUND". 
                         context: {context}
                         file name: {filename}
-                        Also give the file name at the last of the reply in a new line in format
+                        Also give the file name at the last of the reply in a new line in format only if context is correct.
                         Found in File: <file name>'''},
                 {"role": "user", 
                         "content": 
                         f'''{question}'''},
                 ]
-    response = await emb_client.chat(model='mistral:7b-instruct', messages=messages)
-    logger.info(response)
-    return {"response":response['message']['content']}
+    
+    async def generate_response() -> AsyncGenerator[str, None]:
+        response=""
+        async for part in await emb_client.chat(model=MODEL_NAME, messages=messages, stream=True):
+            yield part["message"]["content"]
+            # logger.debug(f"Streamed chunk: {part['message']['content']}")
+            response = response + part['message']['content']
+        logger.info(f'Respose final: {response}')
+
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/plain",
+    )
+
+    # response = await emb_client.chat(model='mistral:7b-instruct', messages=messages)
+    # logger.info(response)
+    # return {"response":response['message']['content']}
