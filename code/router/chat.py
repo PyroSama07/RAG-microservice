@@ -5,6 +5,10 @@ from pydantic import BaseModel
 from ..dependency import get_client, get_emb_client
 import os
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(level=logging.DEBUG) 
+logger = logging.getLogger()
 
 load_dotenv()
 MODEL_NAME = os.getenv("MODEL_NAME")
@@ -15,13 +19,13 @@ class Question(BaseModel):
 
 router = APIRouter(prefix='/chat')
 
-@router.get("/answer/")
+@router.post("/answer/")
 async def rag_answer(
     question: Question,
     emb_client: AsyncClient = Depends(get_emb_client),
     client: QdrantClient = Depends(get_client),
     ) -> dict:
-    embed = emb_client.embed(model=EMBEDDING_NAME,input=question.question)
+    embed = await emb_client.embed(model=EMBEDDING_NAME,input=question.question)
     vector = embed.embeddings[0]
     payload = client.query_points(
                     collection_name="my_books",
@@ -43,5 +47,6 @@ async def rag_answer(
                         "content": 
                         f'''{question}'''},
                 ]
-    response = await emb_client().chat(model='mistral:7b-instruct', messages=messages)
-    return {"response":response}
+    response = await emb_client.chat(model='mistral:7b-instruct', messages=messages)
+    logger.info(response)
+    return {"response":response['message']['content']}
