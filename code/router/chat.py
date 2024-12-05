@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient
 from ollama import AsyncClient
 from pydantic import BaseModel
 from typing import AsyncGenerator
@@ -24,11 +24,11 @@ router = APIRouter(prefix='/chat')
 async def rag_answer(
     question: Question,
     emb_client: AsyncClient = Depends(get_emb_client),
-    client: QdrantClient = Depends(get_client),
+    client: AsyncQdrantClient = Depends(get_client),
     ) -> StreamingResponse:
     embed = await emb_client.embed(model=EMBEDDING_NAME,input=question.question)
     vector = embed.embeddings[0]
-    payload = client.query_points(
+    payload = await client.query_points(
                     collection_name="my_books",
                     query=vector,
                     limit=1,

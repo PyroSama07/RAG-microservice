@@ -1,11 +1,11 @@
 from fastapi import FastAPI, File
 from contextlib import asynccontextmanager
-from qdrant_client import models, QdrantClient
+from qdrant_client import models, AsyncQdrantClient
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import logging 
 import os
 from dotenv import load_dotenv
-from .router import ingestion, delete, chat
+from .router import ingestion, delete, chat, retrieval
 from ollama import AsyncClient
 
 logging.basicConfig(level=logging.DEBUG) 
@@ -21,9 +21,9 @@ EMBEDDING_SIZE=os.getenv('EMBEDDING_SIZE')
 async def lifespan(app: FastAPI):
     emb_client = AsyncClient(host=OLLAMA_URL,timeout=120)
     logger.debug("Embeddings initialized")
-    client = QdrantClient(QDRANT_URL,timeout=60)
-    if not client.collection_exists(collection_name=COLLECTION_NAME):
-        client.create_collection(
+    client = AsyncQdrantClient(QDRANT_URL,timeout=60)
+    if not await client.collection_exists(collection_name=COLLECTION_NAME):
+        await client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=models.VectorParams(
                 size=int(EMBEDDING_SIZE),
@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     else:
         logger.debug("Collection Already existed")
     
-    client.create_payload_index(
+    await client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="name",
         field_schema=models.PayloadSchemaType.TEXT,
@@ -58,6 +58,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(ingestion.router)
 app.include_router(delete.router)
 app.include_router(chat.router)
+app.include_router(retrieval.router)
 
 @app.get("/")
 def read_root():
